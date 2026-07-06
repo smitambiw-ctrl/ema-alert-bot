@@ -24,8 +24,8 @@ warnings.filterwarnings('ignore')
 # ============================================================
 
 # --- Telegram Credentials (REPLACE THESE) ---
-TELEGRAM_TOKEN = "YOUR_BOT_TOKEN_HERE"   # From @BotFather
-TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"   # From getUpdates
+TELEGRAM_TOKEN = "8867149849:AAE7i-xBOJxwhbGvSmFJJWvlbF1vl6h97yM"   # From @BotFather
+TELEGRAM_CHAT_ID = "2075943988"   # From getUpdates
 
 # --- Strategy Parameters ---
 FAST_EMA = 9
