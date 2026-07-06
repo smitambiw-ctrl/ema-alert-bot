@@ -1,6 +1,6 @@
 # ============================================================
-# EMA CROSSOVER ALERT BOT - Render Deployment
-# Runs 24/7, checks signals every 5 minutes during market hours
+# EMA CROSSOVER ALERT BOT - Render Deployment (Secure Version)
+# Reads Telegram credentials from Environment Variables
 # ============================================================
 
 import os
@@ -20,12 +20,12 @@ import pytz
 warnings.filterwarnings('ignore')
 
 # ============================================================
-# CONFIGURATION
+# CONFIGURATION (READ FROM ENVIRONMENT VARIABLES - SECURE)
 # ============================================================
 
-# --- Telegram Credentials (REPLACE THESE) ---
-TELEGRAM_TOKEN = "8867149849:AAE7i-xBOJxwhbGvSmFJJWvlbF1vl6h97yM"   # From @BotFather
-TELEGRAM_CHAT_ID = "2075943988"   # From getUpdates
+# --- Telegram Credentials (Read from Render Environment) ---
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "")
 
 # --- Strategy Parameters ---
 FAST_EMA = 9
@@ -73,7 +73,7 @@ print(f"📊 Watchlist loaded: {len(WATCHLIST)} stocks")
 def send_telegram_message(message):
     """Send a message via Telegram bot with error handling"""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ Telegram credentials missing!")
+        print("❌ Telegram credentials missing! Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in Render Environment.")
         return False
 
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -278,7 +278,6 @@ def force_check():
     """
     Force a signal scan immediately (bypasses market hours for testing)
     """
-    # Run the check with force=True to skip market hours
     check_signals(force=True)
     return "✅ Manual check triggered! Check Telegram for alerts.", 200
 
@@ -292,8 +291,99 @@ def status():
         "market_open": is_market_hours(),
         "stocks_watchlist": len(WATCHLIST),
         "duplicate_window_seconds": DUPLICATE_WINDOW,
-        "sent_signals_count": len(sent_signals)
+        "sent_signals_count": len(sent_signals),
+        "telegram_configured": bool(TELEGRAM_TOKEN and TELEGRAM_CHAT_ID)
     }
+
+# ============================================================
+# SIMULATION ENDPOINTS (For Testing the Exact Notification Format)
+# ============================================================
+
+@app.route('/simulate_buy')
+def simulate_buy():
+    """Simulate a BUY alert for testing the exact notification format"""
+    ticker = "RELIANCE.NS"
+    entry_price = 2850.00
+    sl_price = 2835.00
+    risk = entry_price - sl_price
+
+    tp_prices = {}
+    tp_ratios = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
+    for r in tp_ratios:
+        tp_prices[f"1:{r:.1f}"] = entry_price + (risk * r)
+
+    message = f"""
+╔════════════════════════════════════════╗
+║  🚨 <b>EMA CROSSOVER SIGNAL</b> 🚨
+╠════════════════════════════════════════╣
+║  <b>Ticker:</b> {ticker}
+║  <b>Signal:</b> BUY 🟢 (SIMULATED)
+║  <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} IST
+║
+║  📊 <b>Current Price:</b> ₹{entry_price:.2f}
+║  📉 <b>Stop Loss:</b> ₹{sl_price:.2f}
+║  📈 <b>Risk per share:</b> ₹{risk:.2f}
+║
+║  🎯 <b>Take Profit Targets:</b>
+"""
+    for label, price in tp_prices.items():
+        pct = ((price - entry_price) / entry_price * 100)
+        message += f"║    {label}: ₹{price:.2f} ({pct:+.2f}%)\n"
+
+    message += f"""
+║
+║  💡 <b>Suggested Action:</b>
+║  Entry @ ₹{entry_price:.2f}
+║  SL @ ₹{sl_price:.2f}
+║  Start with 1:1, trail to higher ratios
+╚════════════════════════════════════════╝
+"""
+
+    send_telegram_message(message)
+    return "✅ Simulated BUY alert sent to Telegram! Check your messages.", 200
+
+@app.route('/simulate_sell')
+def simulate_sell():
+    """Simulate a SELL alert for testing the exact notification format"""
+    ticker = "TCS.NS"
+    entry_price = 4200.00
+    sl_price = 4215.00
+    risk = sl_price - entry_price
+
+    tp_prices = {}
+    tp_ratios = [1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0]
+    for r in tp_ratios:
+        tp_prices[f"1:{r:.1f}"] = entry_price - (risk * r)
+
+    message = f"""
+╔════════════════════════════════════════╗
+║  🚨 <b>EMA CROSSOVER SIGNAL</b> 🚨
+╠════════════════════════════════════════╣
+║  <b>Ticker:</b> {ticker}
+║  <b>Signal:</b> SELL 🔴 (SIMULATED)
+║  <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} IST
+║
+║  📊 <b>Current Price:</b> ₹{entry_price:.2f}
+║  📉 <b>Stop Loss:</b> ₹{sl_price:.2f}
+║  📈 <b>Risk per share:</b> ₹{risk:.2f}
+║
+║  🎯 <b>Take Profit Targets:</b>
+"""
+    for label, price in tp_prices.items():
+        pct = ((entry_price - price) / entry_price * 100)
+        message += f"║    {label}: ₹{price:.2f} ({pct:+.2f}%)\n"
+
+    message += f"""
+║
+║  💡 <b>Suggested Action:</b>
+║  Entry @ ₹{entry_price:.2f}
+║  SL @ ₹{sl_price:.2f}
+║  Start with 1:1, trail to higher ratios
+╚════════════════════════════════════════╝
+"""
+
+    send_telegram_message(message)
+    return "✅ Simulated SELL alert sent to Telegram! Check your messages.", 200
 
 # ============================================================
 # SCHEDULER (runs in background thread)
@@ -326,12 +416,15 @@ if __name__ == '__main__':
     print(f"📊 Watchlist: {len(WATCHLIST)} stocks")
     print(f"⚡ Timeframe: {TIMEFRAME} | EMAs: {FAST_EMA}/{SLOW_EMA}")
     print(f"🕒 Market hours: 9:15 AM - 3:30 PM IST (Monday-Friday)")
-    print(f"📱 Telegram: {'✅ Configured' if TELEGRAM_TOKEN != 'YOUR_BOT_TOKEN_HERE' else '❌ Missing Token'}")
-    print("=" * 60)
-
-    # Send startup notification
-    if TELEGRAM_TOKEN != "YOUR_BOT_TOKEN_HERE" and TELEGRAM_CHAT_ID != "YOUR_CHAT_ID_HERE":
+    
+    # Check if credentials are configured
+    if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+        print("📱 Telegram: ✅ Configured (via Environment Variables)")
         send_telegram_message("🤖 <b>EMA Alert Bot is ONLINE!</b>\nMonitoring your watchlist for crossover signals.\n\n⏰ Will run every 5 minutes during market hours.")
+    else:
+        print("📱 Telegram: ❌ MISSING! Set TELEGRAM_TOKEN and TELEGRAM_CHAT_ID in Render Environment.")
+    
+    print("=" * 60)
 
     # Start the scheduler in a background thread
     scheduler_thread = threading.Thread(target=run_scheduler, daemon=True)
