@@ -24,8 +24,8 @@ warnings.filterwarnings('ignore')
 # ============================================================
 
 # --- Telegram Credentials (REPLACE THESE) ---
-TELEGRAM_TOKEN = "8867149849:AAE7i-xBOJxwhbGvSmFJJWvlbF1vl6h97yM"   # From @BotFather
-TELEGRAM_CHAT_ID = "2075943988"   # From getUpdates
+TELEGRAM_TOKEN = "YOUR_BOT_TOKEN_HERE"   # From @BotFather
+TELEGRAM_CHAT_ID = "YOUR_CHAT_ID_HERE"   # From getUpdates
 
 # --- Strategy Parameters ---
 FAST_EMA = 9
@@ -40,7 +40,6 @@ DUPLICATE_WINDOW = 1800  # 30 minutes
 sent_signals = {}  # key: ticker, value: last_signal_time
 
 # --- Stock Watchlist (Large Cap + Mid Cap) ---
-# For faster testing, use [:5] but for full list remove the slice
 WATCHLIST = [
     # NIFTY 50 (Large Cap)
     'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
@@ -121,15 +120,18 @@ def is_market_hours():
 # CORE SIGNAL DETECTION
 # ============================================================
 
-def check_signals():
+def check_signals(force=False):
     """
     Fetch latest 30-min data for all stocks and detect EMA crossovers.
     Sends Telegram alert when a new signal appears.
+    
+    Args:
+        force (bool): If True, bypass market hours check (used for testing)
     """
     print(f"\n🔍 Checking signals at {datetime.now().strftime('%H:%M:%S')} IST")
 
-    # Skip if market is closed (except when forced via /force_check)
-    if not is_market_hours():
+    # Skip if market is closed (unless forced)
+    if not force and not is_market_hours():
         print("⏰ Market closed. Skipping scan.")
         return
 
@@ -158,8 +160,6 @@ def check_signals():
             prev_candle = df.iloc[-2]
 
             current_price = current_candle['Close']
-            current_high = current_candle['High']
-            current_low = current_candle['Low']
             prev_high = prev_candle['High']
             prev_low = prev_candle['Low']
 
@@ -275,20 +275,11 @@ def test_telegram():
 
 @app.route('/force_check')
 def force_check():
-    """Force a signal scan immediately (bypasses market hours for testing)"""
-    # Temporarily override market hours check
-    global original_is_market_hours
-    def force_true():
-        return True
-    original_is_market_hours = is_market_hours
-    # Monkey-patch for this run
-    global is_market_hours
-    is_market_hours = force_true
-    
-    check_signals()
-    
-    # Restore original
-    is_market_hours = original_is_market_hours
+    """
+    Force a signal scan immediately (bypasses market hours for testing)
+    """
+    # Run the check with force=True to skip market hours
+    check_signals(force=True)
     return "✅ Manual check triggered! Check Telegram for alerts.", 200
 
 @app.route('/status')
